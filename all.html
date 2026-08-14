@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>All Good Things — Project overview</title>
+<style>
+  :root{--cream:#FBF7F0;--ink:#2B2622;--gold:#E0A82E;--crust:#8A5A2B;
+    --line:rgba(43,38,34,.12);--muted:rgba(43,38,34,.6);
+    --assigned:#B9B2A8;--draft:#C98A2E;--peer:#6E8FB8;--lead:#5C6FAF;--approved:#2F7D5B}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--cream);color:var(--ink);line-height:1.45;-webkit-text-size-adjust:100%}
+  .wrap{max-width:1120px;margin:0 auto;padding:22px 18px 80px}
+  .logo{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--crust)}
+  h1{font-size:24px;margin:6px 0 2px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin:0 0 8px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .card .n{font-size:26px;font-weight:800;line-height:1.1}
+  .card .l{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+
+  .bar{display:flex;height:24px;border-radius:999px;overflow:hidden;margin:14px 0 6px;
+    border:1px solid var(--line);background:#fff}
+  .bar div{height:100%}
+  .key{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-bottom:20px}
+  .key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  .tools{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;align-items:center}
+  .tools input,.tools select{border:1px solid var(--line);border-radius:10px;padding:8px 11px;
+    font:inherit;background:#fff;color:var(--ink)}
+  .tools input{flex:1;min-width:180px}
+  .count{color:var(--muted);font-size:13px}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);
+    border-radius:12px;overflow:hidden;font-size:14px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    padding:9px 10px;border-bottom:1px solid var(--line);background:#fdfbf7;white-space:nowrap}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tr.doc{cursor:pointer}
+  tr.doc:hover td{background:#fdfbf7}
+  .id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);white-space:nowrap}
+  .pill{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;
+    color:#fff;white-space:nowrap}
+  .lead-tag{font-size:11px;font-weight:800;color:var(--crust);background:rgba(224,168,46,.22);
+    padding:2px 7px;border-radius:999px}
+  .flag{color:var(--gold);font-weight:800}
+  .body{background:#fdfbf7}
+  .body td{padding:12px 14px}
+  .body h4{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--crust)}
+  .body p{margin:0 0 10px;white-space:pre-wrap}
+  .body ol{margin:0 0 10px;padding-left:20px}
+  .empty{color:var(--muted);font-style:italic}
+  .err{background:#fde8e8;border:1px solid #f3b4b4;color:#8a1c1c;border-radius:12px;padding:14px;margin:20px 0}
+  .skel{color:var(--muted);text-align:center;padding:40px 0}
+  @media(max-width:700px){ .hide-sm{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">All Good Things</div>
+  <div id="app"><p class="skel">Loading…</p></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  "use strict";
+  var API = (window.SOP_CONFIG || {}).url || "";
+  var KEY = (window.SOP_CONFIG || {}).anonKey || "";
+  var TOKEN = new URLSearchParams(location.search).get("t") || "";
+  var app = document.getElementById("app");
+  var data = null;
+
+  var STATUS = [
+    ["assigned", "Not started", "var(--assigned)"],
+    ["draft", "Written", "var(--draft)"],
+    ["peer_reviewed", "Staff-checked", "var(--peer)"],
+    ["lead_reviewed", "Kristyn done", "var(--lead)"],
+    ["approved", "Approved", "var(--approved)"]
+  ];
+
+  function rpc(fn, args) {
+    return fetch(API + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
+      body: JSON.stringify(args)
+    }).then(function (r) { return r.json(); });
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function statusMeta(k) {
+    for (var i = 0; i < STATUS.length; i++) if (STATUS[i][0] === k) return STATUS[i];
+    return [k, k, "var(--muted)"];
+  }
+
+  function fmt(ts) {
+    if (!ts) return "";
+    var d = new Date(ts);
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  }
+
+  function header() {
+    var t = data.totals, x = data.taxonomy;
+    var h = "<h1>Process capture — where everything stands</h1>";
+    h += '<p class="sub">' + esc(data.viewer) + " · read-only · " +
+         t.documents + " documents, " + x.subtasks + " subtasks</p>";
+
+    h += '<div class="cards">';
+    h += '<div class="card"><div class="n">' + t.documents + '</div><div class="l">Documents</div></div>';
+    h += '<div class="card"><div class="n">' + (t.documents - t.assigned) +
+         '</div><div class="l">Started</div></div>';
+    h += '<div class="card"><div class="n">' + t.approved + '</div><div class="l">Approved</div></div>';
+    h += '<div class="card"><div class="n">' + t.staff_track + ' / ' + t.lead_track +
+         '</div><div class="l">Staff / lead</div></div>';
+    h += '<div class="card"><div class="n">' + t.flagged_to_split +
+         '</div><div class="l">Flagged to split</div></div>';
+    h += "</div>";
+
+    // Progress bar. 'assigned' is drawn too, so the bar always reads as the whole project
+    // rather than only the part that has moved.
+    h += '<div class="bar">';
+    STATUS.forEach(function (s) {
+      var n = t[s[0]] || 0;
+      if (!n) return;
+      h += '<div style="width:' + (n / t.documents * 100) + '%;background:' + s[2] +
+           '" title="' + s[1] + ": " + n + '"></div>';
+    });
+    h += "</div><div class=\"key\">";
+    STATUS.forEach(function (s) {
+      h += '<span><i style="background:' + s[2] + '"></i>' + s[1] + " " + (t[s[0]] || 0) + "</span>";
+    });
+    h += "</div>";
+
+    h += '<div class="cards" style="margin-bottom:18px">';
+    h += '<div class="card"><div class="n">' + x.confirmed + " / " + (x.subtasks - x.pointers) +
+         '</div><div class="l">Subtasks confirmed</div></div>';
+    h += '<div class="card"><div class="n">' + x.rejected + '</div><div class="l">Cut by review</div></div>';
+    h += '<div class="card"><div class="n">' + x.added + '</div><div class="l">Added by review</div></div>';
+    h += "</div>";
+    return h;
+  }
+
+  function tools() {
+    var h = '<div class="tools">';
+    h += '<input id="q" type="search" placeholder="Filter by title, person or id…" />';
+    h += '<select id="fstatus"><option value="">Any status</option>';
+    STATUS.forEach(function (s) { h += '<option value="' + s[0] + '">' + s[1] + "</option>"; });
+    h += "</select>";
+    h += '<select id="ftrack"><option value="">Both tracks</option>' +
+         '<option value="staff">Staff</option><option value="lead">Jess &amp; Kristyn</option></select>';
+    h += '<span class="count" id="count"></span></div>';
+    return h;
+  }
+
+  function rows(list) {
+    if (!list.length) return '<tr><td colspan="6" class="empty">Nothing matches that filter.</td></tr>';
+    return list.map(function (d, i) {
+      var s = statusMeta(d.status);
+      return '<tr class="doc" data-i="' + i + '">' +
+        '<td class="id">' + esc(d.subtask_id || d.process_id) + "</td>" +
+        "<td>" + esc(d.title) +
+        (d.track === "lead" ? ' <span class="lead-tag">lead</span>' : "") +
+        (d.split_flag ? ' <span class="flag" title="Over the split threshold">⚑</span>' : "") +
+        "</td>" +
+        '<td class="hide-sm">' + esc(d.author || "—") + "</td>" +
+        '<td class="hide-sm">' + esc(d.reviewer || "—") + "</td>" +
+        '<td><span class="pill" style="background:' + s[2] + '">' + s[1] + "</span></td>" +
+        '<td class="id hide-sm">' + fmt(d.updated_at) + "</td></tr>";
+    }).join("");
+  }
+
+  function detail(d) {
+    var h = '<tr class="body"><td colspan="6">';
+    h += "<h4>" + esc(d.process_name) + " · " + esc(d.section) + "</h4>";
+    var any = false;
+    if ((d.equipment || []).length) {
+      any = true;
+      h += "<h4>Equipment</h4><p>" + esc(d.equipment.join(", ")) + "</p>";
+    }
+    if ((d.segments || []).length) {
+      any = true;
+      h += "<h4>Steps</h4><ol>";
+      d.segments.forEach(function (s) {
+        var bits = [];
+        if (s.hands_on_min != null) bits.push(Math.round(s.hands_on_min * 60) + "s hands-on");
+        if (s.elapsed_min != null) bits.push(s.elapsed_min + " min elapsed");
+        h += "<li>" + esc(s.label) +
+             (bits.length ? ' <span class="id">— ' + esc(bits.join(", ")) + "</span>" : "") + "</li>";
+      });
+      h += "</ol>";
+    }
+    [["gotchas", "What goes wrong"], ["done_when", "How you know it's right"],
+     ["need_to_ask", "Author would have to ask"], ["unsupervised", "Not unsupervised"],
+     ["split_note", "Reviewer on splitting"]].forEach(function (f) {
+      if (d[f[0]]) { any = true; h += "<h4>" + f[1] + "</h4><p>" + esc(d[f[0]]) + "</p>"; }
+    });
+    if (!any) h += '<p class="empty">Nothing written yet.</p>';
+    return h + "</td></tr>";
+  }
+
+  var view = [];
+  function apply() {
+    var q = (document.getElementById("q").value || "").toLowerCase();
+    var st = document.getElementById("fstatus").value;
+    var tr = document.getElementById("ftrack").value;
+    view = data.docs.filter(function (d) {
+      if (st && d.status !== st) return false;
+      if (tr && d.track !== tr) return false;
+      if (!q) return true;
+      return ((d.title || "") + (d.author || "") + (d.reviewer || "") +
+              (d.subtask_id || d.process_id)).toLowerCase().indexOf(q) >= 0;
+    });
+    document.getElementById("tbody").innerHTML = rows(view);
+    document.getElementById("count").textContent = view.length + " of " + data.docs.length;
+  }
+
+  function render() {
+    var h = header() + tools();
+    h += "<table><thead><tr><th>Id</th><th>Document</th><th class=\"hide-sm\">Writes</th>" +
+         "<th class=\"hide-sm\">Checks</th><th>Status</th><th class=\"hide-sm\">Updated</th></tr></thead>" +
+         '<tbody id="tbody"></tbody></table>';
+
+    h += '<h1 style="font-size:19px;margin-top:30px">Who is carrying what</h1>';
+    h += "<table><thead><tr><th>Person</th><th>Function</th><th>Writes</th><th>Checks</th>" +
+         "<th>Started</th></tr></thead><tbody>";
+    data.people.forEach(function (p) {
+      if (!p.writes && !p.checks) return;
+      h += "<tr><td>" + esc(p.name) + '</td><td class="id">' + esc(p.fn) + "</td><td>" +
+           p.writes + "</td><td>" + p.checks + "</td><td>" + p.done + " / " + p.writes + "</td></tr>";
+    });
+    h += "</tbody></table>";
+
+    if (data.recent.length) {
+      h += '<h1 style="font-size:19px;margin-top:30px">Recent activity</h1>';
+      h += "<table><thead><tr><th>When</th><th>Who</th><th>Did</th><th>On</th></tr></thead><tbody>";
+      data.recent.forEach(function (e) {
+        h += '<tr><td class="id">' + esc(new Date(e.at).toLocaleString()) + "</td><td>" +
+             esc(e.who || "—") + '</td><td class="id">' + esc(e.action) +
+             '</td><td class="id">' + esc(e.doc || "—") + "</td></tr>";
+      });
+      h += "</tbody></table>";
+    }
+
+    app.innerHTML = h;
+    ["q", "fstatus", "ftrack"].forEach(function (id) {
+      document.getElementById(id).addEventListener("input", apply);
+      document.getElementById(id).addEventListener("change", apply);
+    });
+    apply();
+
+    document.getElementById("tbody").addEventListener("click", function (e) {
+      var tr = e.target.closest("tr.doc");
+      if (!tr) return;
+      var open = tr.nextElementSibling && tr.nextElementSibling.classList.contains("body");
+      var existing = document.querySelector("tr.body");
+      if (existing) existing.remove();
+      if (!open) tr.insertAdjacentHTML("afterend", detail(view[Number(tr.dataset.i)]));
+    });
+  }
+
+  if (!TOKEN) { app.innerHTML = '<div class="err">This link needs its code — add ?t=… to the URL.</div>'; return; }
+  rpc("sop_overview", { p_token: TOKEN }).then(function (res) {
+    if (!res || !res.ok) {
+      app.innerHTML = '<div class="err">That link did not open. It may have been revoked.</div>';
+      return;
+    }
+    data = res;
+    render();
+  }).catch(function () {
+    app.innerHTML = '<div class="err">Could not reach the server.</div>';
+  });
+})();
+</script>
+</body>
+</html>
