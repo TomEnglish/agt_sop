@@ -223,8 +223,33 @@
     document.getElementById("count").textContent = view.length + " of " + data.docs.length;
   }
 
+  function corrections() {
+    var c = data.corrections || [];
+    var h = '<h1 style="font-size:19px;margin-top:26px">What the review changed</h1>';
+    if (!c.length) {
+      return h + '<p class="sub">Nothing yet — this fills in as Kristyn and Jess work ' +
+             'through the lists. Kept, cut, added, and every note they leave.</p>';
+    }
+    h += '<p class="sub">' + c.length + ' of ' + data.taxonomy.subtasks +
+         ' subtasks touched. Newest first.</p>';
+    h += "<table><thead><tr><th>Id</th><th>Step</th><th>Verdict</th><th>What they said</th>" +
+         "<th class=\"hide-sm\">Who</th></tr></thead><tbody>";
+    var VERDICT = { confirmed: ["Keep", "var(--approved)"], rejected: ["Not a thing", "#A33A3A"],
+                    added: ["Added", "var(--crust)"], proposed: ["—", "var(--assigned)"] };
+    c.forEach(function (r) {
+      var v = VERDICT[r.status] || [r.status, "var(--muted)"];
+      h += '<tr><td class="id">' + esc(r.subtask_id) + "</td>" +
+           "<td>" + esc(r.subtask) + '<span class="id"> · ' + esc(r.process) + "</span></td>" +
+           '<td><span class="pill" style="background:' + v[1] + '">' + v[0] + "</span></td>" +
+           "<td>" + (r.note ? esc(r.note) : '<span class="empty">—</span>') + "</td>" +
+           '<td class="id hide-sm">' + esc(r.by || "") + " " + fmt(r.at) + "</td></tr>";
+    });
+    return h + "</tbody></table>";
+  }
+
   function render() {
-    var h = header() + tools();
+    var h = header() + corrections() +
+            '<h1 style="font-size:19px;margin-top:30px">Documents</h1>' + tools();
     h += "<table><thead><tr><th>Id</th><th>Document</th><th class=\"hide-sm\">Writes</th>" +
          "<th class=\"hide-sm\">Checks</th><th>Status</th><th class=\"hide-sm\">Updated</th></tr></thead>" +
          '<tbody id="tbody"></tbody></table>';
