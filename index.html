@@ -39,6 +39,8 @@
     background:rgba(43,38,34,.07);color:var(--muted);margin-top:3px}
   .src.guess{background:rgba(224,168,46,.28);color:var(--crust)}
   .pointer{color:var(--muted);font-size:13px;font-style:italic;margin-top:4px}
+  .byline{display:block;color:var(--crust);font-size:12px;font-weight:700;margin-top:6px}
+  .byline.mine{color:var(--muted);font-weight:400}
 
   .acts{display:flex;gap:8px;margin-top:8px}
   .acts button{flex:0 0 auto;min-height:40px;padding:6px 16px;border-radius:10px;border:1px solid var(--line);
@@ -109,6 +111,13 @@
     flash._t = setTimeout(function () { statusEl.classList.remove("show"); }, 1400);
   }
 
+  function first(n) { return String(n || "").split(" ")[0]; }
+
+  function when(ts) {
+    var d = new Date(ts);
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  }
+
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
@@ -164,6 +173,15 @@
            '<button type="button" class="cut" data-act="rejected" aria-pressed="' +
              (s.status === "rejected") + '">Not a thing</button>' +
            "</div>";
+      // Both leads work this same list, so say plainly when a row already carries someone
+      // else's answer — otherwise the second person overwrites the first without noticing.
+      if (s.by) {
+        var mine = s.by === state.viewer;
+        h += '<span class="byline' + (mine ? " mine" : "") + '">' +
+             (mine ? "You answered this" : esc(first(s.by)) + " answered this") +
+             (s.at ? " · " + when(s.at) : "") +
+             (mine ? "" : " — change it if you disagree") + "</span>";
+      }
       h += '<textarea placeholder="Anything to fix or add about this one? (optional)">' +
            esc(s.note) + "</textarea>";
     }
@@ -196,12 +214,28 @@
       "<p><b>You are not writing anything here.</b> Just check the lists. Keep what's right, " +
       "mark what isn't, and add anything we missed.</p>" +
       "<p>The rows marked <b>our guess</b> are the ones we're least sure about — if you're " +
-      "short on time, those are the ones worth your attention.</p></div>";
+      "short on time, those are the ones worth your attention.</p>" + othersNote() + "</div>";
     html += state.domains.map(domainHTML).join("");
     app.innerHTML = html;
     var c = document.getElementById("counter");
     c.hidden = false;
     paintCounter();
+  }
+
+  // You and the other lead share one list. If they have already been through some of it,
+  // say so at the top rather than letting it look untouched.
+  function othersNote() {
+    var who = {}, n = 0;
+    state.domains.forEach(function (d) {
+      d.subtasks.forEach(function (s) {
+        if (s.by && s.by !== state.viewer) { who[s.by] = (who[s.by] || 0) + 1; n++; }
+      });
+    });
+    var names = Object.keys(who);
+    if (!names.length) return "";
+    return '<p><b>' + esc(names.map(first).join(" and ")) + " has already answered " + n +
+           " of these.</b> You'll see their answers as you go — leave them if you agree, " +
+           "change them if you don't.</p>";
   }
 
   function findSubtask(id) {
@@ -252,6 +286,8 @@
 
     // Tapping the active verdict again clears it, back to undecided.
     s.status = (s.status === act) ? "proposed" : act;
+    s.by = state.viewer;
+    s.at = new Date().toISOString();
 
     // Repaint only this row. A full re-render would tear down every textarea on the page,
     // dropping focus and the caret if she is part-way through typing a note elsewhere.
@@ -260,6 +296,8 @@
       "aria-pressed", String(s.status === "confirmed" || s.status === "added"));
     row.querySelector(".cut").setAttribute(
       "aria-pressed", String(s.status === "rejected"));
+    var bl = row.querySelector(".byline");
+    if (bl) { bl.className = "byline mine"; bl.textContent = "You answered this · " + when(s.at); }
     paintCounter();
 
     rpc("sop_taxonomy_vote", {
