@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>All Good Things — Check the task lists</title>
+<style>
+  /* Same palette as the skills survey — they have seen this once already. */
+  :root{--cream:#FBF7F0;--ink:#2B2622;--gold:#E0A82E;--crust:#8A5A2B;
+    --line:rgba(43,38,34,.12);--muted:rgba(43,38,34,.6);
+    --keep:#2F7D5B;--cut:#A33A3A}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--cream);color:var(--ink);line-height:1.5;-webkit-text-size-adjust:100%}
+  .wrap{max-width:720px;margin:0 auto;padding:24px 18px 110px}
+  header{text-align:center;padding:8px 0 4px}
+  .logo{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:13px;color:var(--crust)}
+  h1{font-size:26px;line-height:1.2;margin:12px 0 6px}
+  .greet{font-size:20px;font-weight:700;margin:20px 0 4px}
+  .intro{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin:16px 0 8px;color:#3a342e}
+  .intro p{margin:0 0 8px} .intro p:last-child{margin:0}
+  .badge{display:inline-block;background:rgba(224,168,46,.18);color:var(--crust);font-weight:700;
+    font-size:12px;padding:4px 10px;border-radius:999px;margin-bottom:10px}
+
+  .dom{margin:26px 0 0;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 16px 6px}
+  .dom h2{font-size:20px;margin:0 0 2px}
+  .dom .did{color:var(--muted);font-size:13px;font-weight:700;letter-spacing:.04em}
+  .ask{background:rgba(224,168,46,.14);border-left:3px solid var(--gold);border-radius:0 10px 10px 0;
+    padding:10px 12px;margin:12px 0 4px;font-size:14px}
+  .ask b{color:var(--crust)}
+
+  .st{padding:12px 0;border-top:1px solid var(--line)}
+  .st:first-of-type{border-top:none}
+  .st-top{display:flex;gap:10px;align-items:flex-start}
+  .st-name{font-weight:600;font-size:16px;flex:1}
+  .ev{display:block;color:var(--muted);font-size:13px;font-weight:400;margin-top:2px}
+  .src{font-size:11px;font-weight:800;padding:2px 7px;border-radius:999px;white-space:nowrap;
+    background:rgba(43,38,34,.07);color:var(--muted);margin-top:3px}
+  .src.guess{background:rgba(224,168,46,.28);color:var(--crust)}
+  .pointer{color:var(--muted);font-size:13px;font-style:italic;margin-top:4px}
+
+  .acts{display:flex;gap:8px;margin-top:8px}
+  .acts button{flex:0 0 auto;min-height:40px;padding:6px 16px;border-radius:10px;border:1px solid var(--line);
+    background:#fff;font:inherit;font-weight:700;font-size:14px;color:var(--ink);cursor:pointer}
+  .acts button[aria-pressed="true"].keep{background:var(--keep);border-color:var(--keep);color:#fff}
+  .acts button[aria-pressed="true"].cut{background:var(--cut);border-color:var(--cut);color:#fff}
+  .acts button:focus-visible{box-shadow:0 0 0 3px rgba(224,168,46,.35);outline:none}
+  .st.cutrow .st-name{text-decoration:line-through;color:var(--muted)}
+
+  textarea,input[type=text]{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    font:inherit;background:#fff;color:var(--ink);margin-top:8px}
+  textarea{min-height:56px;resize:vertical}
+  textarea:focus,input[type=text]:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(224,168,46,.2)}
+
+  .addrow{display:flex;gap:8px;margin:10px 0 14px}
+  .addrow input{margin-top:0}
+  .addrow button{flex:0 0 auto;min-height:42px;padding:0 18px;border-radius:10px;border:none;
+    background:var(--crust);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+
+  #savestatus{position:sticky;top:8px;z-index:5;margin:12px 0 0;text-align:center;
+    color:var(--crust);font-size:13px;font-weight:700;opacity:0;transition:opacity .3s}
+  #savestatus.show{opacity:1}
+  .counter{position:fixed;left:0;right:0;bottom:0;background:var(--cream);
+    border-top:1px solid var(--line);text-align:center;padding:12px 12px 20px;
+    font-weight:700;color:var(--crust);z-index:4}
+  .err{background:#fde8e8;border:1px solid #f3b4b4;color:#8a1c1c;border-radius:12px;padding:14px;margin:20px 0}
+  .foot{color:var(--muted);font-size:13px;text-align:center;margin-top:20px}
+  .skel{color:var(--muted);text-align:center;padding:40px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><div class="logo">All Good Things</div></header>
+  <div id="app"><p class="skel">Loading…</p></div>
+  <p class="foot">Your answers save as you go. You can close this and come back.</p>
+</div>
+<div class="counter" id="counter" hidden></div>
+<div id="savestatus">Saved</div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var API = (window.SOP_CONFIG || {}).url || "";
+  var KEY = (window.SOP_CONFIG || {}).anonKey || "";
+  var TOKEN = new URLSearchParams(location.search).get("t") || "";
+  var app = document.getElementById("app");
+  var statusEl = document.getElementById("savestatus");
+  var state = null;
+  var timers = {};
+
+  function rpc(fn, args) {
+    return fetch(API + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
+      body: JSON.stringify(args)
+    }).then(function (r) {
+      if (!r.ok) throw new Error(fn + " " + r.status);
+      return r.json();
+    });
+  }
+
+  function flash(msg) {
+    statusEl.textContent = msg;
+    statusEl.classList.add("show");
+    clearTimeout(flash._t);
+    flash._t = setTimeout(function () { statusEl.classList.remove("show"); }, 1400);
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function fail(msg) {
+    app.innerHTML = '<div class="err">' + esc(msg) + "</div>";
+  }
+
+  // ---- counting: how much of the list still has no answer on it
+  function progress() {
+    var total = 0, done = 0;
+    state.domains.forEach(function (d) {
+      d.subtasks.forEach(function (s) {
+        if (s.ref) return;                 // pointers need no verdict
+        total++;
+        if (s.status === "confirmed" || s.status === "rejected" || s.status === "added") done++;
+      });
+    });
+    return { done: done, total: total };
+  }
+
+  function paintCounter() {
+    var p = progress();
+    var el = document.getElementById("counter");
+    if (el) {
+      el.textContent = p.done === p.total
+        ? "All " + p.total + " checked — thank you, that's the lot."
+        : p.done + " of " + p.total + " checked";
+    }
+  }
+
+  // ---- rendering
+  function subtaskHTML(s) {
+    var isGuess = s.source === "guess";
+    var srcLabel = s.source === "sq" ? "from Square"
+                 : s.source === "jp" ? "from Jess"
+                 : "our guess";
+    var h = '<div class="st' + (s.status === "rejected" ? " cutrow" : "") + '" data-id="' + esc(s.id) + '">';
+    h += '<div class="st-top"><div class="st-name">' + esc(s.name);
+    // For a pointer the evidence is just "see E8", which the line below already says.
+    if (s.evidence && !s.ref) h += '<span class="ev">' + esc(s.evidence) + "</span>";
+    h += '</div><span class="src' + (isGuess ? " guess" : "") + '">' + srcLabel + "</span></div>";
+
+    if (s.ref) {
+      h += '<div class="pointer">↩ Already covered by ' + esc(s.ref) +
+           " — no separate write-up needed.</div>";
+    } else {
+      h += '<div class="acts">' +
+           '<button type="button" class="keep" data-act="confirmed" aria-pressed="' +
+             (s.status === "confirmed" || s.status === "added") + '">Keep</button>' +
+           '<button type="button" class="cut" data-act="rejected" aria-pressed="' +
+             (s.status === "rejected") + '">Not a thing</button>' +
+           "</div>";
+      h += '<textarea placeholder="Anything to fix or add about this one? (optional)">' +
+           esc(s.note) + "</textarea>";
+    }
+    return h + "</div>";
+  }
+
+  function domainHTML(d) {
+    var h = '<section class="dom" data-domain="' + esc(d.id) + '">';
+    h += '<div class="did">' + esc(d.id) + " · " + esc(d.section) + "</div>";
+    h += "<h2>" + esc(d.name) + "</h2>";
+    if (d.question) h += '<div class="ask"><b>One question:</b> ' + esc(d.question) + "</div>";
+    h += d.subtasks.map(subtaskHTML).join("");
+    h += '<div class="addrow"><input type="text" placeholder="Add a step we missed" />' +
+         "<button type=\"button\" data-add=\"1\">Add</button></div>";
+    return h + "</section>";
+  }
+
+  function render() {
+    var p = progress();
+    // Jess holds a review link too, and telling her about "Jess's answers" reads badly.
+    var isOwner = /^Jess/i.test(state.viewer || "");
+    var sourced = isOwner
+      ? "from your Square data and your own interview answers"
+      : "from the bakery's Square data and Jess's interview answers";
+    var html = '<div class="greet">Hi ' + esc((state.viewer || "").split(" ")[0]) + "</div>";
+    html += '<div class="intro"><span class="badge">About 20 minutes</span>' +
+      "<p>The team surveys are all back. Seventeen of the skills turned out to be whole jobs " +
+      "rather than single tasks, so we broke them into the steps underneath — mostly pulled " +
+      esc(sourced) + " rather than guessed.</p>" +
+      "<p><b>You are not writing anything here.</b> Just check the lists. Keep what's right, " +
+      "mark what isn't, and add anything we missed.</p>" +
+      "<p>The rows marked <b>our guess</b> are the ones we're least sure about — if you're " +
+      "short on time, those are the ones worth your attention.</p></div>";
+    html += state.domains.map(domainHTML).join("");
+    app.innerHTML = html;
+    var c = document.getElementById("counter");
+    c.hidden = false;
+    paintCounter();
+  }
+
+  function findSubtask(id) {
+    for (var i = 0; i < state.domains.length; i++) {
+      var list = state.domains[i].subtasks;
+      for (var j = 0; j < list.length; j++) if (list[j].id === id) return list[j];
+    }
+    return null;
+  }
+
+  // ---- events (delegated, so added rows work without rebinding)
+  app.addEventListener("click", function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+
+    if (btn.dataset.add) {
+      var wrap = btn.closest(".addrow");
+      var input = wrap.querySelector("input");
+      var name = input.value.trim();
+      if (!name) return;
+      var domId = btn.closest(".dom").dataset.domain;
+      btn.disabled = true;
+      rpc("sop_taxonomy_add", { p_token: TOKEN, p_process_id: domId, p_name: name })
+        .then(function (res) {
+          btn.disabled = false;
+          if (!res.ok) return flash("Could not add that");
+          input.value = "";
+          var dom = state.domains.filter(function (d) { return d.id === domId; })[0];
+          var added = {
+            id: res.subtask_id, seq: dom.subtasks.length + 1, name: name,
+            source: "guess", evidence: null, status: "added", note: "", ref: null
+          };
+          dom.subtasks.push(added);
+          // Insert just this row above the add box, for the same reason as above.
+          wrap.insertAdjacentHTML("beforebegin", subtaskHTML(added));
+          paintCounter();
+          flash("Added");
+        })
+        .catch(function () { btn.disabled = false; flash("Could not add that"); });
+      return;
+    }
+
+    var act = btn.dataset.act;
+    if (!act) return;
+    var row = btn.closest(".st");
+    var s = findSubtask(row.dataset.id);
+    if (!s) return;
+
+    // Tapping the active verdict again clears it, back to undecided.
+    s.status = (s.status === act) ? "proposed" : act;
+
+    // Repaint only this row. A full re-render would tear down every textarea on the page,
+    // dropping focus and the caret if she is part-way through typing a note elsewhere.
+    row.classList.toggle("cutrow", s.status === "rejected");
+    row.querySelector(".keep").setAttribute(
+      "aria-pressed", String(s.status === "confirmed" || s.status === "added"));
+    row.querySelector(".cut").setAttribute(
+      "aria-pressed", String(s.status === "rejected"));
+    paintCounter();
+
+    rpc("sop_taxonomy_vote", {
+      p_token: TOKEN, p_subtask_id: s.id, p_status: s.status, p_note: s.note || null
+    }).then(function () { flash("Saved"); }).catch(function () { flash("Not saved — check signal"); });
+  });
+
+  app.addEventListener("input", function (e) {
+    if (e.target.tagName !== "TEXTAREA") return;
+    var row = e.target.closest(".st");
+    var s = findSubtask(row.dataset.id);
+    if (!s) return;
+    s.note = e.target.value;
+    clearTimeout(timers[s.id]);
+    timers[s.id] = setTimeout(function () {
+      rpc("sop_taxonomy_vote", {
+        p_token: TOKEN, p_subtask_id: s.id, p_status: s.status, p_note: s.note || null
+      }).then(function () { flash("Saved"); }).catch(function () { flash("Not saved — check signal"); });
+    }, 700);
+  });
+
+  // Re-paint the counter without a full re-render on every keystroke.
+  app.addEventListener("input", paintCounter);
+
+  // ---- boot
+  if (!TOKEN) { fail("This link is missing its code. Please use the link from the message we sent."); return; }
+  if (!API) { fail("This page is not configured yet."); return; }
+
+  rpc("sop_taxonomy_open", { p_token: TOKEN })
+    .then(function (res) {
+      if (!res || !res.ok) {
+        fail("We couldn't open this link. It may have expired — reply to the message and we'll send a fresh one.");
+        return;
+      }
+      state = res;
+      state.domains.forEach(function (d) {
+        d.subtasks.forEach(function (s) { if (s.note == null) s.note = ""; });
+      });
+      render();
+    })
+    .catch(function () { fail("Couldn't reach the server. Check your signal and reload."); });
+})();
+</script>
+</body>
+</html>

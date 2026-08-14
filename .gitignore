@@ -1,0 +1,6 @@
+# Written at deploy time by the netlify.toml build command, from the site's environment
+# variables. Never commit it — not because the anon key is secret (it is served to every
+# visitor) but so there is exactly one place the values come from.
+config.js
+.netlify
+.DS_Store

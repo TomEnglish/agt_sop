@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>All Good Things — Write it down</title>
+<style>
+  :root{--cream:#FBF7F0;--ink:#2B2622;--gold:#E0A82E;--crust:#8A5A2B;
+    --line:rgba(43,38,34,.12);--muted:rgba(43,38,34,.6)}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--cream);color:var(--ink);line-height:1.5;-webkit-text-size-adjust:100%}
+  .wrap{max-width:720px;margin:0 auto;padding:24px 18px 110px}
+  header{text-align:center;padding:8px 0 4px}
+  .logo{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:13px;color:var(--crust)}
+  .did{color:var(--muted);font-size:13px;font-weight:700;letter-spacing:.04em;margin-top:18px}
+  h1{font-size:25px;line-height:1.2;margin:2px 0 10px}
+  .intro{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin:14px 0;color:#3a342e}
+  .intro p{margin:0 0 8px} .intro p:last-child{margin:0}
+  .badge{display:inline-block;background:rgba(224,168,46,.18);color:var(--crust);font-weight:700;
+    font-size:12px;padding:4px 10px;border-radius:999px;margin-bottom:10px}
+  .reassure{background:rgba(47,125,91,.10);border-left:3px solid #2F7D5B;border-radius:0 10px 10px 0;
+    padding:10px 12px;margin:10px 0 0;font-size:14px}
+
+  fieldset{border:none;padding:0;margin:26px 0 0}
+  legend{font-weight:800;font-size:18px;padding:0;margin:0 0 2px}
+  .hint{color:var(--muted);font-size:14px;margin:0 0 10px}
+
+  textarea,input{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 13px;
+    font:inherit;background:#fff;color:var(--ink)}
+  textarea{min-height:84px;resize:vertical}
+  textarea:focus,input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(224,168,46,.2)}
+
+  .seg{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 0 10px}
+  .seg-head{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+  .seg-n{flex:0 0 26px;height:26px;border-radius:999px;background:rgba(224,168,46,.25);color:var(--crust);
+    font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .seg-head input{flex:1}
+  .seg-del{flex:0 0 auto;background:none;border:none;color:var(--muted);font-size:22px;line-height:1;
+    cursor:pointer;padding:0 4px}
+  .times{display:flex;gap:10px}
+  .times label{flex:1;font-size:13px;color:var(--muted);font-weight:700}
+  .times input{margin-top:3px}
+
+  button.add{width:100%;min-height:46px;background:#fff;border:1px dashed var(--line);border-radius:12px;
+    color:var(--crust);font:inherit;font-weight:700;cursor:pointer}
+  button.submit{width:100%;min-height:54px;background:var(--gold);color:var(--ink);border:none;
+    border-radius:999px;font-size:18px;font-weight:800;margin-top:28px;cursor:pointer}
+  button.submit:disabled{opacity:.45;cursor:not-allowed}
+
+  .warn{background:rgba(224,168,46,.16);border-left:3px solid var(--gold);border-radius:0 10px 10px 0;
+    padding:10px 12px;margin:12px 0 0;font-size:14px}
+  .draft{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin:0 0 8px}
+  .draft h3{margin:0 0 6px;font-size:15px;color:var(--crust)}
+  .draft .q{color:var(--muted);font-size:13px;margin:0 0 2px}
+  #savestatus{position:sticky;top:8px;z-index:5;text-align:center;color:var(--crust);
+    font-size:13px;font-weight:700;opacity:0;transition:opacity .3s}
+  #savestatus.show{opacity:1}
+  .err{background:#fde8e8;border:1px solid #f3b4b4;color:#8a1c1c;border-radius:12px;padding:14px;margin:20px 0}
+  .wait{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin:20px 0}
+  .foot{color:var(--muted);font-size:13px;text-align:center;margin-top:20px}
+  .skel{color:var(--muted);text-align:center;padding:40px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><div class="logo">All Good Things</div></header>
+  <div id="savestatus">Saved</div>
+  <div id="app"><p class="skel">Loading…</p></div>
+  <p class="foot">Everything saves as you type. You can close this and come back.</p>
+</div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var API = (window.SOP_CONFIG || {}).url || "";
+  var KEY = (window.SOP_CONFIG || {}).anonKey || "";
+  var TOKEN = new URLSearchParams(location.search).get("t") || "";
+  var app = document.getElementById("app");
+  var statusEl = document.getElementById("savestatus");
+  var d = null;          // the document, as returned by sop_open
+  var saveTimer = null;
+
+  function rpc(fn, args) {
+    return fetch(API + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: "Bearer " + KEY },
+      body: JSON.stringify(args)
+    }).then(function (r) {
+      if (!r.ok) throw new Error(fn + " " + r.status);
+      return r.json();
+    });
+  }
+
+  function flash(m) {
+    statusEl.textContent = m;
+    statusEl.classList.add("show");
+    clearTimeout(flash._t);
+    flash._t = setTimeout(function () { statusEl.classList.remove("show"); }, 1400);
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function first(n) { return String(n || "").split(" ")[0]; }
+  function title() { return d.subtask_name || d.process_name; }
+  function isAuthor() { return d.role === "author"; }
+
+  // FOH thinks in seconds — a register step is 20 seconds, and asking for "0.33 minutes"
+  // would be absurd. Kitchen thinks in minutes. Storage is always minutes so the split
+  // trigger has one unit to reason about.
+  function unit() { return d.fn === "foh" ? "seconds" : "minutes"; }
+  function toStore(v) { return d.fn === "foh" ? (Number(v) || 0) / 60 : (Number(v) || 0); }
+  function toShow(v) {
+    if (v == null || v === "") return "";
+    return d.fn === "foh" ? Math.round(Number(v) * 60) : Number(v);
+  }
+
+  // ---------------------------------------------------------------- copy
+  function authorIntro() {
+    var rollup = d.rollup_seconds >= 60
+      ? (d.rollup_seconds / 60) + " minutes"
+      : d.rollup_seconds + " seconds";
+    return '<div class="intro"><span class="badge">About 20 minutes</span>' +
+      "<p>Describe how you do this, with as much detail as you can. Please mention " +
+      "<b>all the equipment you use</b>, and <b>roughly how long each part takes</b>.</p>" +
+      "<p>Anything under " + rollup + " can be rolled in with the step next to it — " +
+      "no need to time every little thing.</p>" +
+      '<div class="reassure">We know you may still be learning this one. Answer as best ' +
+      "you can. <b>This is not a test and it is not used to assess anyone</b> — it is not " +
+      "going in your file. Someone who could train this will look at it after you and fill " +
+      "in anything you could not.</div></div>";
+  }
+
+  function reviewIntro() {
+    var who = first(d.author_name) || "someone";
+    return '<div class="intro"><span class="badge">About 10 minutes</span>' +
+      "<p><b>" + esc(who) + "</b> wrote the first draft of this. You said you could " +
+      "<b>train</b> this one, so you are the accuracy check.</p>" +
+      "<p>Read it as if you were handing it to someone on their first day. Fix anything " +
+      "wrong, add what is missing — especially equipment and timings — and answer whatever " +
+      esc(who) + " flagged as needing to ask.</p>" +
+      "<p><b>Please don't rewrite their voice.</b> If a step is right, leave it alone.</p></div>";
+  }
+
+  // ---------------------------------------------------------------- pieces
+  function segmentHTML(s, i) {
+    var h = '<div class="seg" data-i="' + i + '"><div class="seg-head">' +
+      '<span class="seg-n">' + (i + 1) + "</span>" +
+      '<input type="text" data-f="label" placeholder="What happens in this step" value="' +
+        esc(s.label) + '" />' +
+      '<button type="button" class="seg-del" title="Remove this step">&times;</button></div>' +
+      '<div class="times"><label>Hands-on (' + unit() + ")" +
+      '<input type="number" min="0" step="any" data-f="hands_on_min" value="' +
+        esc(toShow(s.hands_on_min)) + '" /></label>';
+    if (d.ask_elapsed) {
+      h += "<label>Start to finish, including waiting (minutes)" +
+        '<input type="number" min="0" step="any" data-f="elapsed_min" value="' +
+          esc(s.elapsed_min == null ? "" : s.elapsed_min) + '" /></label>';
+    }
+    return h + "</div></div>";
+  }
+
+  function textField(name, label, hint, value) {
+    return "<fieldset><legend>" + esc(label) + "</legend>" +
+      (hint ? '<p class="hint">' + esc(hint) + "</p>" : "") +
+      '<textarea data-doc="' + name + '">' + esc(value) + "</textarea></fieldset>";
+  }
+
+  function authorDraftBlock() {
+    // Shown to reviewers only: what the author could not answer is the reviewer's worklist.
+    if (!d.need_to_ask) return "";
+    return '<div class="warn"><b>' + esc(first(d.author_name)) +
+      " said they would have to ask someone about this:</b><br>" + esc(d.need_to_ask) + "</div>";
+  }
+
+  // ---------------------------------------------------------------- render
+  function render() {
+    var h = '<div class="did">' + esc(d.process_id) +
+      (d.subtask_id ? " · step " + esc(d.subtask_id.split(".")[1]) : "") +
+      " · " + esc(d.section) + "</div>";
+    h += "<h1>" + esc(title()) + "</h1>";
+
+    if (!d.editable) {
+      h += '<div class="wait"><b>Nothing to do here yet.</b><p class="hint">' +
+        esc(waitingReason()) + "</p></div>";
+      app.innerHTML = h;
+      return;
+    }
+
+    h += isAuthor() ? authorIntro() : reviewIntro();
+    if (!isAuthor()) h += authorDraftBlock();
+
+    var isFoh = d.fn === "foh";
+    h += "<fieldset><legend>Equipment and tools</legend>" +
+      '<p class="hint">Everything you touch — ' +
+      (isFoh ? "machine, grinder, jugs, cups and sizes, the till."
+             : "pans, mixer and attachment, sheet sizes, containers.") +
+      " One per line.</p>" +
+      '<textarea data-doc="equipment" placeholder="' +
+      (isFoh ? "Espresso machine&#10;Grinder&#10;12oz milk jug"
+             : "Stand mixer, paddle attachment&#10;Half sheet pans") + '">' +
+      esc((d.equipment || []).join("\n")) + "</textarea></fieldset>";
+
+    h += "<fieldset><legend>The steps</legend>" +
+      '<p class="hint">In the order you do them.</p>' +
+      '<div id="segs">' + (d.segments || []).map(segmentHTML).join("") + "</div>" +
+      '<button type="button" class="add" id="addseg">+ Add a step</button>' +
+      '<div id="splitwarn"></div></fieldset>';
+
+    h += textField("gotchas", "What goes wrong",
+      "What have you seen go wrong, or had to redo?", d.gotchas);
+    h += textField("done_when", "How you know it's right",
+      "What does it look like when it's finished properly?", d.done_when);
+
+    if (isAuthor()) {
+      h += textField("need_to_ask", "What you'd have to ask someone",
+        "Anything here you're not sure about? This is the most useful box on the page — " +
+        "whoever reviews it will answer these.", d.need_to_ask);
+    } else {
+      h += textField("unsupervised", "Anything here you would not let someone do unsupervised?",
+        "This feeds the training plan later.", d.unsupervised);
+      h += textField("split_note", "Should this be more than one document?",
+        "If this is really two or three jobs, say how you would split it.", d.split_note);
+    }
+
+    h += '<button type="button" class="submit" id="submit">' +
+      (isAuthor() ? "Send it on" : "Approve and pass it on") + "</button>";
+
+    app.innerHTML = h;
+    paintSplit();
+  }
+
+  function waitingReason() {
+    if (d.status === "approved") return "This one is finished and signed off.";
+    if (d.role === "author") return "This has already gone on to be reviewed, so it is out " +
+      "of your hands now. Thank you.";
+    if (d.role === "review_peer") return "The first draft has not been sent in yet. We will " +
+      "let you know when it is ready for you.";
+    if (d.role === "review_lead") return "This is still with the person writing it and the " +
+      "staff member checking it. It reaches you once both are done.";
+    return "This reaches you once it has been written and checked by two people.";
+  }
+
+  function paintSplit() {
+    var el = document.getElementById("splitwarn");
+    if (!el) return;
+    el.innerHTML = d.split_flag
+      ? '<div class="warn">That is a lot of steps for one document. It may really be two ' +
+        "or three separate jobs — whoever reviews this will be asked the same thing.</div>"
+      : "";
+  }
+
+  // ---------------------------------------------------------------- collect + save
+  function collect() {
+    var body = {};
+    var eq = app.querySelector('[data-doc="equipment"]');
+    if (eq) {
+      body.equipment = eq.value.split("\n")
+        .map(function (x) { return x.trim(); })
+        .filter(Boolean);
+    }
+    var segs = [];
+    app.querySelectorAll("#segs .seg").forEach(function (el) {
+      var label = el.querySelector('[data-f="label"]').value.trim();
+      var hands = el.querySelector('[data-f="hands_on_min"]').value;
+      var elapsedEl = el.querySelector('[data-f="elapsed_min"]');
+      if (!label && !hands) return;                  // skip a row they started and abandoned
+      var s = { label: label || "(unnamed step)" };
+      if (hands !== "") s.hands_on_min = toStore(hands);
+      if (elapsedEl && elapsedEl.value !== "") s.elapsed_min = Number(elapsedEl.value);
+      segs.push(s);
+    });
+    body.segments = segs;
+    ["gotchas", "done_when", "need_to_ask", "unsupervised", "split_note"].forEach(function (k) {
+      var el = app.querySelector('[data-doc="' + k + '"]');
+      if (el) body[k] = el.value;
+    });
+    return body;
+  }
+
+  function save() {
+    var body = collect();
+    d.equipment = body.equipment;
+    d.segments = body.segments;
+    return rpc("sop_save", { p_token: TOKEN, p_body: body }).then(function (res) {
+      if (!res || !res.ok) { flash("Not saved"); return res; }
+      d.split_flag = res.split_flag;
+      paintSplit();
+      flash("Saved");
+      return res;
+    }).catch(function () { flash("Not saved — check signal"); });
+  }
+
+  function queueSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 700);
+  }
+
+  // ---------------------------------------------------------------- events
+  app.addEventListener("input", function (e) {
+    if (e.target.matches("textarea, input")) queueSave();
+  });
+
+  app.addEventListener("click", function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+
+    if (btn.id === "addseg") {
+      d.segments = collect().segments;
+      d.segments.push({ label: "" });
+      document.getElementById("segs").insertAdjacentHTML(
+        "beforeend", segmentHTML({ label: "" }, d.segments.length - 1));
+      var rows = document.querySelectorAll("#segs .seg");
+      rows[rows.length - 1].querySelector('[data-f="label"]').focus();
+      return;
+    }
+
+    if (btn.classList.contains("seg-del")) {
+      var seg = btn.closest(".seg");
+      var i = Number(seg.dataset.i);
+      d.segments = collect().segments;
+      d.segments.splice(i, 1);
+      document.getElementById("segs").innerHTML = d.segments.map(segmentHTML).join("");
+      save();
+      return;
+    }
+
+    if (btn.id === "submit") {
+      var missing = !collect().segments.length;
+      if (missing && !confirm("You haven't added any steps yet. Send it anyway?")) return;
+      btn.disabled = true;
+      btn.textContent = "Sending…";
+      save().then(function () {
+        return rpc("sop_submit", { p_token: TOKEN });
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          btn.disabled = false;
+          btn.textContent = "Try again";
+          return;
+        }
+        app.innerHTML = '<div class="wait"><b>Thank you — that is sent.</b>' +
+          '<p class="hint">' + (isAuthor()
+            ? "Someone who can train this will check it next, then Kristyn and Jess."
+            : "This goes to Kristyn next, then Jess.") + "</p></div>";
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = "Try again";
+      });
+    }
+  });
+
+  // ---------------------------------------------------------------- boot
+  if (!TOKEN) {
+    app.innerHTML = '<div class="err">This link is missing its code. Please use the link ' +
+      "from the message we sent.</div>";
+    return;
+  }
+  rpc("sop_open", { p_token: TOKEN })
+    .then(function (res) {
+      if (!res || !res.ok) {
+        app.innerHTML = '<div class="err">We could not open this link. It may have expired ' +
+          "— reply to the message and we will send a fresh one.</div>";
+        return;
+      }
+      d = res;
+      render();
+    })
+    .catch(function () {
+      app.innerHTML = '<div class="err">Could not reach the server. Check your signal and ' +
+        "reload.</div>";
+    });
+})();
+</script>
+</body>
+</html>

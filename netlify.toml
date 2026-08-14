@@ -1,0 +1,20 @@
+# No framework, no bundler — the only build step writes config.js from the environment so
+# the Supabase URL and anon key are never committed. Same convention as the storefront's
+# netlify.toml: set them in the Netlify UI.
+#
+# Required environment variables (Site configuration -> Environment variables):
+#   SUPABASE_URL       https://clhsksotuxueqankqibf.supabase.co
+#   SUPABASE_ANON_KEY  the project's anon / publishable key
+#
+# The anon key is public by design — it is served to every visitor — and grants execute on
+# six sop_* functions and nothing else. It is kept out of git for hygiene, not secrecy.
+
+[build]
+  publish = "."
+  command = """printf 'window.SOP_CONFIG={url:"%s",anonKey:"%s"};' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > config.js"""
+
+# The review links are per-person and unlisted; keep them out of search results.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
